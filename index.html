@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I Love You Heart Animation</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000; /* Deep black background */
+            font-family: 'Courier New', monospace; /* Monospace font for that code/matrix look */
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* Optional UI overlay if you want to add a message later */
+        #message {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: #ea80b0;
+            opacity: 0.7;
+            pointer-events: none;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="heartCanvas"></canvas>
+    <div id="message">Made for you</div>
+
+    <script>
+        const canvas = document.getElementById('heartCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        
+        // Configuration from the image request
+        const config = {
+            text: "i love you",
+            color: "#ea80b0", // Pinkish color from the screenshot
+            glow: "#ffffff",  // White glow
+            particleCount: 500, // Number of text phrases
+            baseSize: 14,     // Font size
+            scale: 20,        // Scale of the heart structure
+            rotationSpeed: 0.005,
+        };
+
+        // Resize handling
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            // Re-center coordinate system
+            ctx.translate(width / 2, height / 2);
+        }
+
+        window.addEventListener('resize', resize);
+
+        // Heart Math Function (3D)
+        // Returns {x, y, z} for a point on a heart surface
+        function getHeartPoint(t) {
+            // t goes from 0 to 2*PI
+            // Using a variation of the heart curve for 3D volume
+            
+            // Basic 2D Heart curve
+            let x = 16 * Math.pow(Math.sin(t), 3);
+            let y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+            
+            // Add depth (Z) to make it 3D. 
+            // We'll distribute points to give it volume
+            let z = 0;
+
+            return { x, y, z };
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Random angle t
+                const t = Math.random() * Math.PI * 2;
+                
+                // Get base heart shape position
+                const pos = getHeartPoint(t);
+                
+                // Add some randomness to spread the text out and create a "cloud" or "ribbon" feel
+                // varying z to create depth thickness
+                const variation = (Math.random() - 0.5) * 10; 
+                
+                this.x = pos.x * config.scale + (Math.random() - 0.5) * 20;
+                this.y = pos.y * config.scale + (Math.random() - 0.5) * 20;
+                this.z = variation * 10; // Depth thickness
+                
+                // Randomize starting phase for individual wobble if needed
+                this.phase = Math.random() * Math.PI * 2;
+            }
+
+            draw(angle) {
+                // 3D Rotation Math
+                // Rotate around Y axis
+                let rx = this.x * Math.cos(angle) - this.z * Math.sin(angle);
+                let rz = this.x * Math.sin(angle) + this.z * Math.cos(angle);
+                let ry = this.y;
+
+                // Perspective projection
+                const fov = 400; // Field of view
+                const scale = fov / (fov + rz); 
+                
+                const screenX = rx * scale;
+                const screenY = ry * scale;
+
+                // Opacity based on depth (fading out back particles)
+                const alpha = Math.max(0.1, (scale - 0.5) * 1.5); // Simple depth cue
+                
+                ctx.font = `${config.baseSize * scale}px monospace`;
+                ctx.fillStyle = config.color;
+                ctx.globalAlpha = alpha;
+                
+                // Apply the glow effect (expensive on performance, so use sparingly or with low blur)
+                // We simulate glow by drawing text twice or using shadow, but shadow is heavy.
+                // Let's use simple opacity for performance with many particles.
+                // For the "wizard" look, we add a specific shadow only to front particles
+                if (scale > 0.8) {
+                   ctx.shadowBlur = 10;
+                   ctx.shadowColor = config.glow;
+                } else {
+                   ctx.shadowBlur = 0;
+                }
+
+                // Draw the text
+                // We offset by width/2 height/2 because we translated context in resize()
+                ctx.fillText(config.text, screenX + (width/2), screenY + (height/2));
+            }
+        }
+
+        function init() {
+            resize();
+            // Create particles
+            for (let i = 0; i < config.particleCount; i++) {
+                particles.push(new Particle());
+            }
+            animate();
+        }
+
+        let angle = 0;
+        function animate() {
+            // Clear canvas with a very slight fade effect for trails (optional), 
+            // but strict clearing is better for text readability
+            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to clear full rect
+            ctx.fillStyle = "rgba(0, 0, 0, 1)";
+            ctx.fillRect(0, 0, width, height);
+            
+            // Re-apply center translation for drawing
+            // Note: Particle.draw uses manual screenX/Y calculation relative to center, 
+            // but we need to reset shadows and styles.
+            
+            angle += config.rotationSpeed;
+
+            // Sort particles by Z (depth) so we draw back ones first (Painter's algorithm)
+            // We need to calculate their rotated Z to sort correctly
+            particles.sort((a, b) => {
+                let rzA = a.x * Math.sin(angle) + a.z * Math.cos(angle);
+                let rzB = b.x * Math.sin(angle) + b.z * Math.cos(angle);
+                return rzB - rzA; // Draw furthest away (largest Z) first? 
+                // In our projection, larger Z is further away if we look down -Z.
+                // Actually in standard calc: Z is depth.
+            });
+
+            particles.forEach(p => p.draw(angle));
+
+            requestAnimationFrame(animate);
+        }
+
+        init();
+
+    </script>
+</body>
+</html>
