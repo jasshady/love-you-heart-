@@ -50,7 +50,7 @@
             particleCount: 500, // Number of text phrases
             baseSize: 14,     // Font size
             scale: 20,        // Scale of the heart structure
-            rotationSpeed: 0.005,
+            flowSpeed: 0.003, // Speed of the text moving along the path
         };
 
         // Resize handling
@@ -82,62 +82,64 @@
 
         class Particle {
             constructor() {
-                this.reset();
-            }
-
-            reset() {
-                // Random angle t
-                const t = Math.random() * Math.PI * 2;
+                // Initialize at a random position along the curve (0 to 2PI)
+                this.t = Math.random() * Math.PI * 2;
                 
-                // Get base heart shape position
-                const pos = getHeartPoint(t);
-                
-                // Add some randomness to spread the text out and create a "cloud" or "ribbon" feel
-                // varying z to create depth thickness
-                const variation = (Math.random() - 0.5) * 10; 
-                
-                this.x = pos.x * config.scale + (Math.random() - 0.5) * 20;
-                this.y = pos.y * config.scale + (Math.random() - 0.5) * 20;
-                this.z = variation * 10; // Depth thickness
+                // Determine a random "lane" or offset for this particle 
+                // so they don't all travel in a single thin line.
+                // This creates the "volume" of the heart.
+                this.offsetX = (Math.random() - 0.5) * 20;
+                this.offsetY = (Math.random() - 0.5) * 20;
+                this.offsetZ = (Math.random() - 0.5) * 20; // Thickness depth
                 
                 // Randomize starting phase for individual wobble if needed
                 this.phase = Math.random() * Math.PI * 2;
             }
 
-            draw(angle) {
-                // 3D Rotation Math
-                // Rotate around Y axis
-                let rx = this.x * Math.cos(angle) - this.z * Math.sin(angle);
-                let rz = this.x * Math.sin(angle) + this.z * Math.cos(angle);
-                let ry = this.y;
-
-                // Perspective projection
-                const fov = 400; // Field of view
-                const scale = fov / (fov + rz); 
+            move() {
+                // Move 't' forward to slide along the heart path
+                this.t += config.flowSpeed;
                 
-                const screenX = rx * scale;
-                const screenY = ry * scale;
+                // Wrap around when completing the loop
+                if (this.t > Math.PI * 2) {
+                    this.t -= Math.PI * 2;
+                }
+            }
 
-                // Opacity based on depth (fading out back particles)
-                const alpha = Math.max(0.1, (scale - 0.5) * 1.5); // Simple depth cue
+            draw() {
+                // 1. Calculate the base position on the heart curve for current 't'
+                const pos = getHeartPoint(this.t);
+                
+                // 2. Apply scaling and the particle's unique offset (volume)
+                let x = pos.x * config.scale + this.offsetX;
+                let y = pos.y * config.scale + this.offsetY;
+                let z = pos.z * config.scale + this.offsetZ;
+
+                // 3. 3D Projection (Simple Perspective)
+                // We keep the camera fixed now (no global rotation)
+                // But we still use Z for scale/depth effect
+                const fov = 400; 
+                const scale = fov / (fov + z); 
+                
+                const screenX = x * scale;
+                const screenY = y * scale;
+
+                // Opacity based on depth (fading out back particles slightly)
+                const alpha = Math.max(0.1, (scale - 0.5) * 1.5); 
                 
                 ctx.font = `${config.baseSize * scale}px monospace`;
                 ctx.fillStyle = config.color;
                 ctx.globalAlpha = alpha;
                 
-                // Apply the glow effect (expensive on performance, so use sparingly or with low blur)
-                // We simulate glow by drawing text twice or using shadow, but shadow is heavy.
-                // Let's use simple opacity for performance with many particles.
-                // For the "wizard" look, we add a specific shadow only to front particles
-                if (scale > 0.8) {
-                   ctx.shadowBlur = 10;
+                // Glow effect for "front" particles
+                if (scale > 0.9) {
+                   ctx.shadowBlur = 15;
                    ctx.shadowColor = config.glow;
                 } else {
                    ctx.shadowBlur = 0;
                 }
 
                 // Draw the text
-                // We offset by width/2 height/2 because we translated context in resize()
                 ctx.fillText(config.text, screenX + (width/2), screenY + (height/2));
             }
         }
@@ -151,31 +153,23 @@
             animate();
         }
 
-        let angle = 0;
         function animate() {
-            // Clear canvas with a very slight fade effect for trails (optional), 
-            // but strict clearing is better for text readability
-            ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform to clear full rect
+            // Clear canvas
+            ctx.setTransform(1, 0, 0, 1, 0, 0); 
             ctx.fillStyle = "rgba(0, 0, 0, 1)";
             ctx.fillRect(0, 0, width, height);
             
-            // Re-apply center translation for drawing
-            // Note: Particle.draw uses manual screenX/Y calculation relative to center, 
-            // but we need to reset shadows and styles.
-            
-            angle += config.rotationSpeed;
-
-            // Sort particles by Z (depth) so we draw back ones first (Painter's algorithm)
-            // We need to calculate their rotated Z to sort correctly
+            // Sort particles by Z (depth) so we draw back ones first
+            // Since the heart is mostly flat now, this handles the 'thickness' sorting
             particles.sort((a, b) => {
-                let rzA = a.x * Math.sin(angle) + a.z * Math.cos(angle);
-                let rzB = b.x * Math.sin(angle) + b.z * Math.cos(angle);
-                return rzB - rzA; // Draw furthest away (largest Z) first? 
-                // In our projection, larger Z is further away if we look down -Z.
-                // Actually in standard calc: Z is depth.
+                // Just use the static Z offset for sorting roughly
+                return b.offsetZ - a.offsetZ; 
             });
 
-            particles.forEach(p => p.draw(angle));
+            particles.forEach(p => {
+                p.move();
+                p.draw();
+            });
 
             requestAnimationFrame(animate);
         }
