@@ -17,6 +17,36 @@
             display: block;
         }
 
+        /* Overlay to ensure music plays (Browsers block auto-play without interaction) */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 10;
+            cursor: pointer;
+            transition: opacity 1s ease;
+        }
+
+        #overlay h1 {
+            color: #ea80b0;
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px #ea80b0;
+        }
+
+        #overlay p {
+            color: white;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
         /* Optional UI overlay if you want to add a message later */
         #message {
             position: absolute;
@@ -27,10 +57,24 @@
             opacity: 0.7;
             pointer-events: none;
             font-size: 14px;
+            z-index: 5;
         }
     </style>
 </head>
 <body>
+
+    <!-- Audio Element -->
+    <!-- REPLACE 'music.mp3' WITH YOUR ACTUAL AUDIO FILE NAME -->
+    <audio id="bgMusic" loop>
+        <source src="music.mp3" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- Click Overlay -->
+    <div id="overlay">
+        <h1>Click to Start</h1>
+        <p>Turn up the volume &hearts;</p>
+    </div>
 
     <canvas id="heartCanvas"></canvas>
     <div id="message">Made for you</div>
@@ -38,6 +82,21 @@
     <script>
         const canvas = document.getElementById('heartCanvas');
         const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const music = document.getElementById('bgMusic');
+
+        // Handle Click to Play Music
+        let musicStarted = false;
+        overlay.addEventListener('click', () => {
+            if (!musicStarted) {
+                music.play().catch(e => console.log("Audio play failed:", e));
+                musicStarted = true;
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 1000);
+            }
+        });
 
         let width, height;
         let particles = [];
